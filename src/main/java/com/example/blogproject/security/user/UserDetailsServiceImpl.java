@@ -10,14 +10,14 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-// userDetailsImple¿¡ account¸¦ ³Ö¾îÁÖ´Â ¼­ºñ½ºÀÔ´Ï´Ù.
+// userDetailsImpleì— accountë¥¼ ë„£ì–´ì£¼ëŠ” ì„œë¹„ìŠ¤ìž…ë‹ˆë‹¤.
 public class UserDetailsServiceImpl implements UserDetailsService {
     private final AccountRepository accountRepository;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
 
-        Account account = accountRepository.findByEmail(email).orElseThrow(
+        Account account = accountRepository.findOneWithAuthoritiesByEmail(email).orElseThrow(
                 () -> new RuntimeException("Not Found Account")
         );
 

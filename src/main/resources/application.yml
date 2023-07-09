@@ -20,15 +20,21 @@ spring:
     database: mysql
     hibernate:
       ddl-auto: create-drop
-            #      ddl-auto: update
+#                  ddl-auto: update
       properties:
         dialect: org.hibernate.dialect.MySQL8Dialect
         hibernate:
           show_sql: true
           format_sql: true
 
+  #data.sql이 매번 실행되도록 함
+  sql:
+    init:
+      mode: always
+
 logging:
   level:
     org.hibernate.SQL: debug
     org.hibernate.orm.jdbc.bind.: trace
-        #??? ???
+
+

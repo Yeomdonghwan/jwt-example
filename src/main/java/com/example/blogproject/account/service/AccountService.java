@@ -3,6 +3,7 @@ package com.example.blogproject.account.service;
 import com.example.blogproject.account.dto.AccountReqDto;
 import com.example.blogproject.account.dto.LoginReqDto;
 import com.example.blogproject.account.entity.Account;
+import com.example.blogproject.account.entity.Authority;
 import com.example.blogproject.account.entity.RefreshToken;
 import com.example.blogproject.account.repository.AccountRepository;
 import com.example.blogproject.account.repository.RefreshTokenRepository;
@@ -16,7 +17,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -28,16 +31,21 @@ public class AccountService {
 
     @Transactional
     public GlobalResDto signup(AccountReqDto accountReqDto) {
-        // nickname Áßº¹°Ë»ç
-        if(accountRepository.findByEmail(accountReqDto.getEmail()).isPresent()){
+        //nickname ì¤‘ë³µê²€ì‚¬
+        if(accountRepository.findOneWithAuthoritiesByEmail(accountReqDto.getEmail()).isPresent()){
             throw new RuntimeException("Overlap Check");
         }
 
-        // ÆĞ½º¿öµå ¾ÏÈ£È­
+        // íŒ¨ìŠ¤ì›Œë“œ ì•”í˜¸í™”
         accountReqDto.setEncodePwd(passwordEncoder.encode(accountReqDto.getPassword()));
         Account account = new Account(accountReqDto);
 
-        // È¸¿ø°¡ÀÔ ¼º°ø
+        //ê¸°ë³¸ê¶Œí•œ ì„¤ì •
+        Authority authority = Authority.builder()
+                .authorityName("ROLE_USER")
+                .build();
+        account.setAuthorities(Collections.singleton(authority));
+        // íšŒì›ê°€ì… ì„±ê³µ
         accountRepository.save(account);
         return new GlobalResDto("Success signup", HttpStatus.OK.value());
     }
@@ -45,24 +53,24 @@ public class AccountService {
     @Transactional
     public GlobalResDto login(LoginReqDto loginReqDto, HttpServletResponse response) {
 
-        // ¾ÆÀÌµğ °Ë»ç
-        Account account = accountRepository.findByEmail(loginReqDto.getEmail()).orElseThrow(
+        // ì•„ì´ë”” ê²€ì‚¬
+        Account account = accountRepository.findOneWithAuthoritiesByEmail(loginReqDto.getEmail()).orElseThrow(
                 () -> new RuntimeException("Not found Account")
         );
 
-        // ºñ¹Ğ¹øÈ£ °Ë»ç
+        // ë¹„ë°€ë²ˆí˜¸ ê²€ì‚¬
         if(!passwordEncoder.matches(loginReqDto.getPassword(), account.getPassword())) {
             throw new RuntimeException("Not matches Password");
         }
 
-        // ¾ÆÀÌµğ Á¤º¸·Î Token»ı¼º
-        TokenDto tokenDto = jwtUtil.createAllToken(loginReqDto.getEmail());
+        // ì•„ì´ë”” ì •ë³´ë¡œ Tokenìƒì„±
+        TokenDto tokenDto = jwtUtil.createAllToken(loginReqDto.getEmail(),account.getAuthorities());
 
-        // RefreshÅäÅ« ÀÖ´ÂÁö È®ÀÎ
+        // Refreshí† í° ìˆëŠ”ì§€ í™•ì¸
         Optional<RefreshToken> refreshToken = refreshTokenRepository.findByAccountEmail(loginReqDto.getEmail());
 
-        // ÀÖ´Ù¸é »õÅäÅ« ¹ß±ŞÈÄ ¾÷µ¥ÀÌÆ®
-        // ¾ø´Ù¸é »õ·Î ¸¸µé°í µğºñ ÀúÀå
+        // ìˆë‹¤ë©´ ìƒˆí† í° ë°œê¸‰í›„ ì—…ë°ì´íŠ¸
+        // ì—†ë‹¤ë©´ ìƒˆë¡œ ë§Œë“¤ê³  ë””ë¹„ ì €ì¥
         if(refreshToken.isPresent()) {
             refreshTokenRepository.save(refreshToken.get().updateToken(tokenDto.getRefreshToken()));
         }else {
@@ -70,7 +78,7 @@ public class AccountService {
             refreshTokenRepository.save(newToken);
         }
 
-        // response Çì´õ¿¡ Access Token / Refresh Token ³ÖÀ½
+        // response í—¤ë”ì— Access Token / Refresh Token ë„£ìŒ
         setHeader(response, tokenDto);
 
         return new GlobalResDto("Success Login", HttpStatus.OK.value());
@@ -80,5 +88,11 @@ public class AccountService {
     private void setHeader(HttpServletResponse response, TokenDto tokenDto) {
         response.addHeader(JwtUtil.ACCESS_TOKEN, tokenDto.getAccessToken());
         response.addHeader(JwtUtil.REFRESH_TOKEN, tokenDto.getRefreshToken());
+    }
+
+    public Set<Authority> getAuthorities(String loginId) {
+        Account account = accountRepository.findOneWithAuthoritiesByEmail(loginId).orElseThrow(
+        );
+        return account.getAuthorities();
     }
 }

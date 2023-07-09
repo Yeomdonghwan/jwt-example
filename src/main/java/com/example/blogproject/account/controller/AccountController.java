@@ -9,10 +9,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -31,5 +29,10 @@ public class AccountController {
         GlobalResDto loginResponse = accountService.login(loginReqDto, response);
         return new ResponseEntity<>(loginResponse, HttpStatus.OK);
     }
-
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/admin")
+    public ResponseEntity<GlobalResDto> adminOnlyMethod() {
+        // ROLE_ADMIN 권한이 있는 사용자만 실행 가능한 로직
+        return new ResponseEntity<>(new GlobalResDto("success!!",200),HttpStatus.OK);
+    }
 }

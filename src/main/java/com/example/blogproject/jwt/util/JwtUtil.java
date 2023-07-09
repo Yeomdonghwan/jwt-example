@@ -1,9 +1,11 @@
 package com.example.blogproject.jwt.util;
 
+import com.example.blogproject.account.entity.Authority;
 import com.example.blogproject.account.entity.RefreshToken;
 import com.example.blogproject.account.repository.RefreshTokenRepository;
 import com.example.blogproject.jwt.dto.TokenDto;
 import com.example.blogproject.security.user.UserDetailsServiceImpl;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -15,13 +17,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
-import java.util.Base64;
-import java.util.Date;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -29,6 +33,7 @@ import java.util.Optional;
 public class JwtUtil {
     private final UserDetailsServiceImpl userDetailsService;
     private final RefreshTokenRepository refreshTokenRepository;
+
 
 //    private static final long ACCESS_TIME = 30 * 60 * 1000L;
 //    private static final long REFRESH_TIME =  7 * 24 * 60 * 60 * 1000L;
@@ -38,45 +43,70 @@ public class JwtUtil {
     public static final String ACCESS_TOKEN = "Access_Token";
     public static final String REFRESH_TOKEN = "Refresh_Token";
 
+    private static final String AUTHORITIES_KEY = "authorities";
+
 
     @Value("${jwt.secret.key}")
     private String secretKey;
     private Key key;
     private final SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.HS256;
 
-    // beanÀ¸·Î µî·Ï µÇ¸é¼­ µü ÇÑ¹ø ½ÇÇàÀÌ µË´Ï´Ù.
+    // beanìœ¼ë¡œ ë“±ë¡ ë˜ë©´ì„œ ë”± í•œë²ˆ ì‹¤í–‰ì´ ë©ë‹ˆë‹¤.
     @PostConstruct
     public void init() {
         byte[] bytes = Base64.getDecoder().decode(secretKey);
         key = Keys.hmacShaKeyFor(bytes);
     }
 
-    // header ÅäÅ«À» °¡Á®¿À´Â ±â´É
+    // header í† í°ì„ ê°€ì ¸ì˜¤ëŠ” ê¸°ëŠ¥
     public String getHeaderToken(HttpServletRequest request, String type) {
         return type.equals("Access") ? request.getHeader(ACCESS_TOKEN) :request.getHeader(REFRESH_TOKEN);
     }
 
-    // ÅäÅ« »ı¼º
-    public TokenDto createAllToken(String nickname) {
-        return new TokenDto(createToken(nickname, "Access"), createToken(nickname, "Refresh"));
+    // í† í° ìƒì„±
+    public TokenDto createAllToken(String email, Set<Authority> authorities) {
+        return new TokenDto(createAccessToken(email, authorities), createRefreshToken(email,authorities));
     }
 
-    public String createToken(String nickname, String type) {
+    public String createAccessToken(String email, Set<Authority> authorities) {
 
         Date date = new Date();
 
-        long time = type.equals("Access") ? ACCESS_TIME : REFRESH_TIME;
+        long time= ACCESS_TIME;
+
+
+        String str_authorities = authorities.stream()
+                .map(Authority::getAuthorityName)
+                .collect(Collectors.joining(","));
 
         return Jwts.builder()
-                .setSubject(nickname)
+                .setSubject(email)
                 .setExpiration(new Date(date.getTime() + time))
                 .setIssuedAt(date)
+                .claim(AUTHORITIES_KEY,str_authorities)
                 .signWith(key, signatureAlgorithm)
                 .compact();
 
     }
 
-    // ÅäÅ« °ËÁõ
+    public String createRefreshToken(String email, Set<Authority> authorities) {
+
+        Date date = new Date();
+
+        long time = REFRESH_TIME;
+        String str_authorities = authorities.stream()
+                .map(Authority::getAuthorityName)
+                .collect(Collectors.joining(","));
+
+        return Jwts.builder()
+                .setSubject(email)
+                .setExpiration(new Date(date.getTime() + time))
+                .setIssuedAt(date)
+                .claim(AUTHORITIES_KEY,str_authorities)
+                .signWith(key, signatureAlgorithm)
+                .compact();
+    }
+    // í† í° ê²€ì¦
     public Boolean tokenValidation(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
@@ -87,40 +117,76 @@ public class JwtUtil {
         }
     }
 
-    // refreshToken ÅäÅ« °ËÁõ
-    // db¿¡ ÀúÀåµÇ¾î ÀÖ´Â token°ú ºñ±³
-    // db¿¡ ÀúÀåÇÑ´Ù´Â °ÍÀÌ jwt tokenÀ» »ç¿ëÇÑ´Ù´Â °­Á¡À» »ó¼â½ÃÅ²´Ù.
-    // db º¸´Ù´Â redis¸¦ »ç¿ëÇÏ´Â °ÍÀÌ ´õ¿í ÁÁ´Ù. (in-memory db±â ¶§¹®¿¡ Á¶È¸¼Óµµ°¡ ºü¸£°í ÁÖ±âÀûÀ¸·Î »èÁ¦ÇÏ´Â ±â´ÉÀÌ ±âº»ÀûÀ¸·Î Á¸ÀçÇÕ´Ï´Ù.)
+    // refreshToken í† í° ê²€ì¦
+    // dbì— ì €ì¥ë˜ì–´ ìˆëŠ” tokenê³¼ ë¹„êµ
+    // dbì— ì €ì¥í•œë‹¤ëŠ” ê²ƒì´ jwt tokenì„ ì‚¬ìš©í•œë‹¤ëŠ” ê°•ì ì„ ìƒì‡„ì‹œí‚¨ë‹¤.
+    // db ë³´ë‹¤ëŠ” redisë¥¼ ì‚¬ìš©í•˜ëŠ” ê²ƒì´ ë”ìš± ì¢‹ë‹¤. (in-memory dbê¸° ë•Œë¬¸ì— ì¡°íšŒì†ë„ê°€ ë¹ ë¥´ê³  ì£¼ê¸°ì ìœ¼ë¡œ ì‚­ì œí•˜ëŠ” ê¸°ëŠ¥ì´ ê¸°ë³¸ì ìœ¼ë¡œ ì¡´ì¬í•©ë‹ˆë‹¤.)
     public Boolean refreshTokenValidation(String token) {
 
-        // 1Â÷ ÅäÅ« °ËÁõ
+        // 1ì°¨ í† í° ê²€ì¦
         if(!tokenValidation(token)) return false;
 
-        // DB¿¡ ÀúÀåÇÑ ÅäÅ« ºñ±³
+        // DBì— ì €ì¥í•œ í† í° ë¹„êµ
         Optional<RefreshToken> refreshToken = refreshTokenRepository.findByAccountEmail(getEmailFromToken(token));
 
         return refreshToken.isPresent() && token.equals(refreshToken.get().getRefreshToken());
     }
 
-    // ÀÎÁõ °´Ã¼ »ı¼º
+    // ì¸ì¦ ê°ì²´ ìƒì„±
+    //ì´ê±° ì‚¬ìš©í•˜ì§€ì•ŠìŒ
     public Authentication createAuthentication(String email) {
         UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-        // spring security ³»¿¡¼­ °¡Áö°í ÀÖ´Â °´Ã¼ÀÔ´Ï´Ù. (UsernamePasswordAuthenticationToken)
+        // spring security ë‚´ì—ì„œ ê°€ì§€ê³  ìˆëŠ” ê°ì²´ì…ë‹ˆë‹¤. (UsernamePasswordAuthenticationToken)
         return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
     }
 
-    // ÅäÅ«¿¡¼­ email °¡Á®¿À´Â ±â´É
+    // í† í°ì—ì„œ email ê°€ì ¸ì˜¤ëŠ” ê¸°ëŠ¥
+    //ì´ê±° ì‚¬ìš©í•˜ì§€ì•ŠìŒ
     public String getEmailFromToken(String token) {
         return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody().getSubject();
     }
 
-    // ¾î¼¼½º ÅäÅ« Çì´õ ¼³Á¤
+    //í† í°ì—ì„œ authorities ê°€ì ¸ì˜¤ëŠ” ê¸°ëŠ¥
+    public Set<Authority> getAuthoritiesFromToken(String token) {
+        Claims claims = Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+//        List<String> authorityNames = claims.get("authorities", List.class);
+//        return authorityNames.stream()
+//                .map(authorityName -> new Authority(authorityName)) // Authority ìƒì„±ìì— ë§ê²Œ ìˆ˜ì •
+//                .collect(Collectors.toSet());
+        Set<Authority> authorities = Arrays.stream(claims.get(AUTHORITIES_KEY).toString().split(","))
+                .map(Authority::new)
+                .collect(Collectors.toSet());
+        return authorities;
+    }
+
+    //í† í°ì„ ë°›ì•„ì„œ í† í°ì •ë³´ë¥¼ ì´ìš©í•´ authenticationê°ì²´ë¥¼ ë¦¬í„´
+    public Authentication getAuthentication(String token) {
+        Claims claims = Jwts
+                .parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        Collection<? extends GrantedAuthority> authorities =
+                Arrays.stream(claims.get(AUTHORITIES_KEY).toString().split(","))
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toList());
+
+        User principal = new User(claims.getSubject(), "", authorities);
+
+        return new UsernamePasswordAuthenticationToken(principal, token, authorities);
+    }
+
+    // ì–´ì„¸ìŠ¤ í† í° í—¤ë” ì„¤ì •
     public void setHeaderAccessToken(HttpServletResponse response, String accessToken) {
         response.setHeader("Access_Token", accessToken);
     }
 
-    // ¸®ÇÁ·¹½Ã ÅäÅ« Çì´õ ¼³Á¤
+    // ë¦¬í”„ë ˆì‹œ í† í° í—¤ë” ì„¤ì •
     public void setHeaderRefreshToken(HttpServletResponse response, String refreshToken) {
         response.setHeader("Refresh_Token", refreshToken);
     }
+
+
 }

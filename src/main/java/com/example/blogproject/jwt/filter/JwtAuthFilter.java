@@ -1,5 +1,7 @@
 package com.example.blogproject.jwt.filter;
 
+import com.example.blogproject.account.entity.Authority;
+import com.example.blogproject.account.service.AccountService;
 import com.example.blogproject.global.dto.GlobalResDto;
 import com.example.blogproject.jwt.util.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +17,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Set;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -22,38 +25,47 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
 
     @Override
-    // HTTP ¿äÃ»ÀÌ ¿À¸é WAS(tomcat)°¡ HttpServletRequest, HttpServletResponse °´Ã¼¸¦ ¸¸µé¾î Áİ´Ï´Ù.
-    // ¸¸µç ÀÎÀÚ °ªÀ» ¹Ş¾Æ¿É´Ï´Ù.
-    // ¿äÃ»ÀÌ µé¾î¿À¸é diFilterInternal ÀÌ µü ÇÑ¹ø ½ÇÇàµÈ´Ù.
+    // HTTP ìš”ì²­ì´ ì˜¤ë©´ WAS(tomcat)ê°€ HttpServletRequest, HttpServletResponse ê°ì²´ë¥¼ ë§Œë“¤ì–´ ì¤ë‹ˆë‹¤.
+    // ë§Œë“  ì¸ì ê°’ì„ ë°›ì•„ì˜µë‹ˆë‹¤.
+    // ìš”ì²­ì´ ë“¤ì–´ì˜¤ë©´ diFilterInternal ì´ ë”± í•œë²ˆ ì‹¤í–‰ëœë‹¤.
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        // WebSecurityConfig ¿¡¼­ º¸¾Ò´ø UsernamePasswordAuthenticationFilter º¸´Ù ¸ÕÀú µ¿ÀÛÀ» ÇÏ°Ô µË´Ï´Ù.
+        // WebSecurityConfig ì—ì„œ ë³´ì•˜ë˜ UsernamePasswordAuthenticationFilter ë³´ë‹¤ ë¨¼ì € ë™ì‘ì„ í•˜ê²Œ ë©ë‹ˆë‹¤.
 
-        // Access / Refresh Çì´õ¿¡¼­ ÅäÅ«À» °¡Á®¿È.
+        // Access / Refresh í—¤ë”ì—ì„œ í† í°ì„ ê°€ì ¸ì˜´.
         String accessToken = jwtUtil.getHeaderToken(request, "Access");
         String refreshToken = jwtUtil.getHeaderToken(request, "Refresh");
 
         if(accessToken != null) {
-            // ¾î¼¼½º ÅäÅ«°ªÀÌ À¯È¿ÇÏ´Ù¸é setAuthentication¸¦ ÅëÇØ
-            // security context¿¡ ÀÎÁõ Á¤º¸ÀúÀå
+            // ì–´ì„¸ìŠ¤ í† í°ê°’ì´ ìœ íš¨í•˜ë‹¤ë©´ setAuthenticationë¥¼ í†µí•´
+            // security contextì— ì¸ì¦ ì •ë³´ì €ì¥
             if(jwtUtil.tokenValidation(accessToken)){
-                setAuthentication(jwtUtil.getEmailFromToken(accessToken));
+//                setAuthentication(jwtUtil.getEmailFromToken(accessToken));
+                Authentication authentication = jwtUtil.getAuthentication(accessToken);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
-            // ¾î¼¼½º ÅäÅ«ÀÌ ¸¸·áµÈ »óÈ² && ¸®ÇÁ·¹½Ã ÅäÅ« ¶ÇÇÑ Á¸ÀçÇÏ´Â »óÈ²
+            // ì–´ì„¸ìŠ¤ í† í°ì´ ë§Œë£Œëœ ìƒí™© && ë¦¬í”„ë ˆì‹œ í† í° ë˜í•œ ì¡´ì¬í•˜ëŠ” ìƒí™©
             else if (refreshToken != null) {
-                // ¸®ÇÁ·¹½Ã ÅäÅ« °ËÁõ && ¸®ÇÁ·¹½Ã ÅäÅ« DB¿¡¼­  ÅäÅ« Á¸ÀçÀ¯¹« È®ÀÎ
+                // ë¦¬í”„ë ˆì‹œ í† í° ê²€ì¦ && ë¦¬í”„ë ˆì‹œ í† í° DBì—ì„œ  í† í° ì¡´ì¬ìœ ë¬´ í™•ì¸
                 boolean isRefreshToken = jwtUtil.refreshTokenValidation(refreshToken);
-                // ¸®ÇÁ·¹½Ã ÅäÅ«ÀÌ À¯È¿ÇÏ°í ¸®ÇÁ·¹½Ã ÅäÅ«ÀÌ DB¿Í ºñ±³ÇßÀ»¶§ ¶È°°´Ù¸é
+                // ë¦¬í”„ë ˆì‹œ í† í°ì´ ìœ íš¨í•˜ê³  ë¦¬í”„ë ˆì‹œ í† í°ì´ DBì™€ ë¹„êµí–ˆì„ë•Œ ë˜‘ê°™ë‹¤ë©´
                 if (isRefreshToken) {
-                    // ¸®ÇÁ·¹½Ã ÅäÅ«À¸·Î ¾ÆÀÌµğ Á¤º¸ °¡Á®¿À±â
+                    // ë¦¬í”„ë ˆì‹œ í† í°ìœ¼ë¡œ ì•„ì´ë”” ì •ë³´ ê°€ì ¸ì˜¤ê¸°
                     String loginId = jwtUtil.getEmailFromToken(refreshToken);
-                    // »õ·Î¿î ¾î¼¼½º ÅäÅ« ¹ß±Ş
-                    String newAccessToken = jwtUtil.createToken(loginId, "Access");
-                    // Çì´õ¿¡ ¾î¼¼½º ÅäÅ« Ãß°¡
+
+                    // DBì—ì„œ ë¡œê·¸ì¸ IDë¡œ ì‚¬ìš©ìì˜ ê¶Œí•œ ì •ë³´ ì¡°íšŒ
+                    Set<Authority> authorities = jwtUtil.getAuthoritiesFromToken(refreshToken);
+
+
+                    // ìƒˆë¡œìš´ ì–´ì„¸ìŠ¤ í† í° ë°œê¸‰
+                    String newAccessToken = jwtUtil.createAccessToken(loginId, authorities);
+                    // í—¤ë”ì— ì–´ì„¸ìŠ¤ í† í° ì¶”ê°€
                     jwtUtil.setHeaderAccessToken(response, newAccessToken);
-                    // Security context¿¡ ÀÎÁõ Á¤º¸ ³Ö±â
-                    setAuthentication(jwtUtil.getEmailFromToken(newAccessToken));
+//                    //Security contextì— ì¸ì¦ ì •ë³´ ë„£ê¸°
+//                    setAuthentication(jwtUtil.getEmailFromToken(newAccessToken));
+                    Authentication authentication = jwtUtil.getAuthentication(newAccessToken);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
-                // ¸®ÇÁ·¹½Ã ÅäÅ«ÀÌ ¸¸·á || ¸®ÇÁ·¹½Ã ÅäÅ«ÀÌ DB¿Í ºñ±³ÇßÀ»¶§ ¶È°°Áö ¾Ê´Ù¸é
+                // ë¦¬í”„ë ˆì‹œ í† í°ì´ ë§Œë£Œ || ë¦¬í”„ë ˆì‹œ í† í°ì´ DBì™€ ë¹„êµí–ˆì„ë•Œ ë˜‘ê°™ì§€ ì•Šë‹¤ë©´
                 else {
                     jwtExceptionHandler(response, "RefreshToken Expired", HttpStatus.BAD_REQUEST);
                     return;
@@ -64,16 +76,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request,response);
     }
 
-    // SecurityContext ¿¡ Authentication °´Ã¼¸¦ ÀúÀåÇÕ´Ï´Ù.
+    // SecurityContext ì— Authentication ê°ì²´ë¥¼ ì €ì¥í•©ë‹ˆë‹¤.
+    //ì´ê±° ì‚¬ìš©í•˜ì§€ ì•Šê³  getAuthenticationì´ìš©í•¨
     public void setAuthentication(String email) {
         Authentication authentication = jwtUtil.createAuthentication(email);
-        // security°¡ ¸¸µé¾îÁÖ´Â securityContextHolder ±× ¾È¿¡ authenticationÀ» ³Ö¾îÁİ´Ï´Ù.
-        // security°¡ securitycontextholder¿¡¼­ ÀÎÁõ °´Ã¼¸¦ È®ÀÎÇÏ´Âµ¥
-        // jwtAuthfilter¿¡¼­ authenticationÀ» ³Ö¾îÁÖ¸é UsernamePasswordAuthenticationFilter ³»ºÎ¿¡¼­ ÀÎÁõÀÌ µÈ °ÍÀ» È®ÀÎÇÏ°í Ãß°¡ÀûÀÎ ÀÛ¾÷À» ÁøÇàÇÏÁö ¾Ê½À´Ï´Ù.
+        // securityê°€ ë§Œë“¤ì–´ì£¼ëŠ” securityContextHolder ê·¸ ì•ˆì— authenticationì„ ë„£ì–´ì¤ë‹ˆë‹¤.
+        // securityê°€ securitycontextholderì—ì„œ ì¸ì¦ ê°ì²´ë¥¼ í™•ì¸í•˜ëŠ”ë°
+        // jwtAuthfilterì—ì„œ authenticationì„ ë„£ì–´ì£¼ë©´ UsernamePasswordAuthenticationFilter ë‚´ë¶€ì—ì„œ ì¸ì¦ì´ ëœ ê²ƒì„ í™•ì¸í•˜ê³  ì¶”ê°€ì ì¸ ì‘ì—…ì„ ì§„í–‰í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
-    // Jwt ¿¹¿ÜÃ³¸®
+    // Jwt ì˜ˆì™¸ì²˜ë¦¬
     public void jwtExceptionHandler(HttpServletResponse response, String msg, HttpStatus status) {
         response.setStatus(status.value());
         response.setContentType("application/json");
