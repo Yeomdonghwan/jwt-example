@@ -30,6 +30,8 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    // Redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
 
     //유효성 검사를 위해 사용
     implementation 'org.springframework.boot:spring-boot-starter-validation'

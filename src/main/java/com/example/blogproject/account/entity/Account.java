@@ -19,6 +19,10 @@ public class Account {
     @Id @Column(name="account_id")
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @NotBlank
+    private String nickname;
+
     @NotBlank
     private String email;
     @NotBlank
@@ -34,5 +38,6 @@ public class Account {
     public Account(AccountReqDto accountReqDto) {
         this.email = accountReqDto.getEmail();
         this.password = accountReqDto.getPassword();
+        this.nickname = accountReqDto.getNickname();
     }
 }

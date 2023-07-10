@@ -4,6 +4,7 @@ import com.example.blogproject.account.entity.Authority;
 import com.example.blogproject.account.entity.RefreshToken;
 import com.example.blogproject.account.repository.RefreshTokenRepository;
 import com.example.blogproject.jwt.dto.TokenDto;
+import com.example.blogproject.redis.RedisService;
 import com.example.blogproject.security.user.UserDetailsServiceImpl;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -34,6 +35,7 @@ public class JwtUtil {
     private final UserDetailsServiceImpl userDetailsService;
     private final RefreshTokenRepository refreshTokenRepository;
 
+    private final RedisService redisService;
 
 //    private static final long ACCESS_TIME = 30 * 60 * 1000L;
 //    private static final long REFRESH_TIME =  7 * 24 * 60 * 60 * 1000L;
@@ -173,9 +175,15 @@ public class JwtUtil {
                         .map(SimpleGrantedAuthority::new)
                         .collect(Collectors.toList());
 
-        User principal = new User(claims.getSubject(), "", authorities);
+//        User principal = new User(claims.getSubject(), "", authorities);
 
-        return new UsernamePasswordAuthenticationToken(principal, token, authorities);
+        /**
+         * 여기부턴 내가바꾼거
+         * */
+        UserDetails userDetails = userDetailsService.loadUserByUsername(claims.getSubject());
+
+//        return new UsernamePasswordAuthenticationToken(principal, token, authorities);
+        return new UsernamePasswordAuthenticationToken(userDetails, token, authorities);
     }
 
     // 어세스 토큰 헤더 설정
